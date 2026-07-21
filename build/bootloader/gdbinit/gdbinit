@@ -1,0 +1,2 @@
+source /home/alex_ventura/Mestrado/smart_parking/build/bootloader/gdbinit/symbols
+source /home/alex_ventura/Mestrado/smart_parking/build/bootloader/gdbinit/connect

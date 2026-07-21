@@ -1,0 +1,6 @@
+"-specs=/home/alex_ventura/Mestrado/smart_parking/build/bootloader/specs/picolibc.specs"
+-Wno-frame-address
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero
