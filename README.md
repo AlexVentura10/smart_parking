@@ -25,7 +25,7 @@ O ciclo de vida do modelo foi dividido entre o ambiente de nuvem (**Google Colab
 
 ---
 
-## 🛠Tecnologias e Ferramentas
+## Tecnologias e Ferramentas
 
 * **Microcontrolador:** ESP32 (Xtensa LX6 dual-core @ 160 MHz)
 * **Framework Embarcado:** ESP-IDF v6.0.2
@@ -35,7 +35,7 @@ O ciclo de vida do modelo foi dividido entre o ambiente de nuvem (**Google Colab
 
 ---
 
-## 📊 Resultados do Benchmark
+## Resultados do Benchmark
 
 Métricas reais obtidas diretamente no console do ESP32 a partir das imagens estáticas pré-processadas:
 
