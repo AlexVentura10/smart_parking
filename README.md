@@ -49,4 +49,4 @@ Métricas reais obtidas diretamente no console do ESP32 a partir das imagens est
 
 ## Nota: 
 
-Esse projeto foi desenvolvido para foi desenvolvido para aprendizagem e introdução ao TinyML e não se aprofundou em técncias aavançada de otimização, porém possui uma boa margem de evolução. Sinta-se à vontade para adaptar e evoluir esse projeto da maneira que melhor te atenda.  
+Esse projeto foi desenvolvido para fins de aprendizagem e introdução ao TinyML, não se aprofundando em técncias aavançada de otimização, porém possui uma boa margem de evolução. Sinta-se à vontade para adaptar e evoluir esse projeto da maneira que melhor te atenda.  
