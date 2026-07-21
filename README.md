@@ -1,6 +1,6 @@
 # Smart Parking - TinyML Benchmark no ESP32
 
-Esse repositório contém a implementação, o pipeline de dados e o benchmark de um modelo de **Visão Computacional quantizado (TFLite INT8)** embarcado em um microcontrolador **ESP32** usando o ecossistema **ESP-IDF v6.0**.
+Esse repositório contém a implementação, o pipeline de dados e o benchmark de uma **Rede Neural Convolucional (CNN) quantizada em 8 bits (int8)** embarcado em um microcontrolador **ESP32** usando o ecossistema **ESP-IDF v6.0**.
 
 O objetivo do projeto é classificar o status de vagas de estacionamento (*LIVRE* / *OCUPADA*) diretamente na borda (Edge AI / TinyML), avaliando métricas cruciais de sistemas embarcados: **latência de inferência em ciclos de CPU** e **alocação de memória SRAM**.
 
@@ -8,7 +8,7 @@ O objetivo do projeto é classificar o status de vagas de estacionamento (*LIVRE
 
 ## Workflow & Arquitetura do Modelo
 
-O ciclo de vida do modelo foi dividido entre o ambiente de nuvem (**Google Colab**) e o ambiente embarcado:
+O ciclo de desenvolvimento da CNN foi dividido entre o ambiente de nuvem (**Google Colab**) e o ambiente embarcado:
 
 1. **Treinamento & Quantização (Google Colab / TensorFlow):**
    * Treinamento do modelo de classificação de imagem.
@@ -31,7 +31,7 @@ O ciclo de vida do modelo foi dividido entre o ambiente de nuvem (**Google Colab
 * **Framework Embarcado:** ESP-IDF v6.0.2
 * **Engine de Inferência:** TensorFlow Lite for Microcontrollers (`espressif__esp-tflite-micro`)
 * **Treinamento & Modelação:** Google Colab, TensorFlow / Keras, Python 3
-* **Linguagem:** C++ (C++23/C++26)
+* **Linguagem:** C++ 
 
 ---
 
@@ -47,6 +47,6 @@ Métricas reais obtidas diretamente no console do ESP32 a partir das imagens est
 | **Consumo de SRAM** | **123.296 bytes** (~120.4 KiB) |
 | **SRAM Livre (Antes da Alocação)** | ~388 KB |
 
-### Exemplo de Saída Serial (Log em JSON)
-```json
-JSON_LOG:{"app":"smart_parking", "status":"LIVRE", "raw_int8":0, "latency_ms":751.94, "sram_bytes":123296}
+## Nota: 
+
+Esse projeto foi desenvolvido para foi desenvolvido para aprendizagem e introdução ao TinyML e não se aprofundou em técncias aavançada de otimização, porém possui uma boa margem de evolução. Sinta-se à vontade para adaptar e evoluir esse projeto da maneira que melhor te atenda.  
