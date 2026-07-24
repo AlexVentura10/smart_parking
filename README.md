@@ -1,6 +1,6 @@
 # Smart Parking - TinyML Benchmark no ESP32 / ESP32-S3
 
-Esse repositório contém a implementação, o pipeline de dados e o benchmark de uma **Rede Neural Convolucional (CNN) quantizada em 8 bits (int8)** embarcado em microcontroladores **ESP32 / ESP32-S3** usando o ecossistema **ESP-IDF v6.0**.
+Esse repositório contém a implementação, o pipeline de dados e o benchmark de uma **Rede Neural Convolucional (CNN) quantizada em 8 bits (int8)** embarcada em microcontroladores **ESP32 / ESP32-S3** usando o ecossistema **ESP-IDF v6.0**.
 
 O objetivo do projeto é classificar o status de vagas de estacionamento (*LIVRE* / *OCUPADA*) diretamente na borda (Edge AI / TinyML), avaliando métricas cruciais de sistemas embarcados: **latência de inferência estatística (média, desvio padrão e mín/máx)** e **alocação de memória SRAM**.
 
@@ -36,6 +36,18 @@ O ciclo de desenvolvimento da CNN foi dividido entre o ambiente de nuvem (**Goog
 
 ---
 
+## Configurações de Hardware & Reprodutibilidade
+
+Para garantir a reprodutibilidade exata dos benchmarks apresentados, as principais flags de configuração do sistema (presentes em `sdkconfig.defaults`) são:
+
+* **Frequência da CPU:** 160 MHz *(Opcional: 240 MHz para ganho adicional de throughput)*
+* **Suporte à PSRAM:** Habilitado (`CONFIG_SPIRAM=y`) com inicialização no boot
+* **Nível de Otimização do Compilador:** Otimizado para Desempenho (`-O2` / `CONFIG_COMPILER_OPTIMIZATION_PERF=y`)
+
+> **Nota:** Configurações de frequência do clock e alocação de memória na PSRAM impactam diretamente a latência de inferência medida no benchmark.
+
+---
+
 ## Resultados do Benchmark (ESP32-S3)
 
 Métricas estatísticas reais coletadas diretamente no console do ESP32 a partir das imagens estáticas pré-processadas ao longo de 50 execuções:
@@ -47,8 +59,9 @@ Métricas estatísticas reais coletadas diretamente no console do ESP32 a partir
 | **Desvio Padrão** | **0.04 ms** (Mín: 127.32 ms \| Máx: 127.63 ms) |
 | **Consumo de SRAM** | **123.060 bytes** (~120.1 KiB) |
 
+
 ---
 
-## Nota: 
+## Comentário do Desenvolvedor
 
-Esse projeto foi desenvolvido para fins de aprendizagem e introdução ao TinyML, não se aprofundando em técncias avançadas de otimização, porém possui uma boa margem de evolução. Sinta-se à vontade para adaptar e evoluir esse projeto da maneira que melhor te atenda.  
+Esse projeto foi desenvolvido para fins de aprendizagem e introdução ao TinyML, não se aprofundando em técnicas avançadas de otimização, porém possui uma boa margem de evolução. Sinta-se à vontade para adaptar e evoluir esse projeto da maneira que melhor te atenda. 

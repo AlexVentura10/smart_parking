@@ -11,3 +11,9 @@ dependencies.lock
 .DS_Store
 *.pyc
 EOF
+# Componentes baixados automaticamente pelo IDF
+managed_components/
+
+# Caches da IDE e servidores de linguagem
+.vscode/
+.clangd
