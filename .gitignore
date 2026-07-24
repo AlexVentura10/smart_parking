@@ -1,5 +1,13 @@
-managed_components/
+cat << 'EOF' > .gitignore
+# Arquivos do ESP-IDF / Build
 build/
 sdkconfig
 sdkconfig.old
 dependencies.lock
+
+# Arquivos do Sistema e da IDE
+.vscode/
+.idea/
+.DS_Store
+*.pyc
+EOF

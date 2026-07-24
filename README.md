@@ -1,8 +1,8 @@
-# Smart Parking - TinyML Benchmark no ESP32
+# Smart Parking - TinyML Benchmark no ESP32 / ESP32-S3
 
-Esse repositório contém a implementação, o pipeline de dados e o benchmark de uma **Rede Neural Convolucional (CNN) quantizada em 8 bits (int8)** embarcado em um microcontrolador **ESP32** usando o ecossistema **ESP-IDF v6.0**.
+Esse repositório contém a implementação, o pipeline de dados e o benchmark de uma **Rede Neural Convolucional (CNN) quantizada em 8 bits (int8)** embarcado em microcontroladores **ESP32 / ESP32-S3** usando o ecossistema **ESP-IDF v6.0**.
 
-O objetivo do projeto é classificar o status de vagas de estacionamento (*LIVRE* / *OCUPADA*) diretamente na borda (Edge AI / TinyML), avaliando métricas cruciais de sistemas embarcados: **latência de inferência em ciclos de CPU** e **alocação de memória SRAM**.
+O objetivo do projeto é classificar o status de vagas de estacionamento (*LIVRE* / *OCUPADA*) diretamente na borda (Edge AI / TinyML), avaliando métricas cruciais de sistemas embarcados: **latência de inferência estatística (média, desvio padrão e mín/máx)** e **alocação de memória SRAM**.
 
 ---
 
@@ -21,31 +21,33 @@ O ciclo de desenvolvimento da CNN foi dividido entre o ambiente de nuvem (**Goog
 
 3. **Inferência no ESP32 (ESP-IDF + TensorFlow Lite for Microcontrollers):**
    * Carregamento do modelo a partir do array C++ em memória.
-   * Execução da inferência e medição de desempenho via ciclos de CPU e heap interno/SPIRAM.
+   * Alocação da Tensor Arena com suporte a fallback de PSRAM para SRAM interna.
+   * Execução de 50 iterações de inferência após warm-up e medição de desempenho em ciclos de CPU e heap interno.
 
 ---
 
 ## Tecnologias e Ferramentas
 
-* **Microcontrolador:** ESP32 (Xtensa LX6 dual-core @ 160 MHz)
-* **Framework Embarcado:** ESP-IDF v6.0.2
+* **Microcontroladores:** ESP32 / ESP32-S3
+* **Framework Embarcado:** ESP-IDF v6.0.2 (C++26)
 * **Engine de Inferência:** TensorFlow Lite for Microcontrollers (`espressif__esp-tflite-micro`)
 * **Treinamento & Modelação:** Google Colab, TensorFlow / Keras, Python 3
-* **Linguagem:** C++ 
+* **Linguagem:** C++
 
 ---
 
-## Resultados do Benchmark
+## Resultados do Benchmark (ESP32-S3)
 
-Métricas reais obtidas diretamente no console do ESP32 a partir das imagens estáticas pré-processadas:
+Métricas estatísticas reais coletadas diretamente no console do ESP32 a partir das imagens estáticas pré-processadas ao longo de 50 execuções:
 
 | Métrica | Valor Obtido |
 | :--- | :--- |
 | **Status Detectado** | `VAGA LIVRE` |
-| **Latência de Inferência** | **751.94 ms** |
-| **Ciclos de CPU** | 120.309.823 ciclos (@ 160 MHz) |
-| **Consumo de SRAM** | **123.296 bytes** (~120.4 KiB) |
-| **SRAM Livre (Antes da Alocação)** | ~388 KB |
+| **Latência Média** | **127.33 ms** |
+| **Desvio Padrão** | **0.04 ms** (Mín: 127.32 ms \| Máx: 127.63 ms) |
+| **Consumo de SRAM** | **123.060 bytes** (~120.1 KiB) |
+
+---
 
 ## Nota: 
 

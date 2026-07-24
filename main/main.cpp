@@ -1,88 +1,106 @@
 /**
  * @file main.cpp
- * @brief Benchmark de Inferência TinyML em ESP32 para Detecção de Vagas de Estacionamento.
+ * @brief Benchmark de Inferência TinyML Embarcado para Sistemas de Estacionamento Inteligente.
  * 
- * Este arquivo realiza a inicialização do TensorFlow Lite for Microcontrollers (TFLM),
- * alocação dinâmica da memória de tensores (Tensor Arena), pré-processamento/quantização
- * dos dados de entrada (C Byte Array), medição precisa de ciclos de CPU para latência 
- * e monitoramento de consumo de memória SRAM.
- *
+ * Realiza profiling estatístico de latência e rastreamento de memória para modelos
+ * de Visão Computacional quantizados em INT8 executando nas arquiteturas ESP32 / ESP32-S3.
+ * 
  * @author Alex Mateus da Silva Ventura
  * @framework ESP-IDF v6.0+ | TensorFlow Lite for Microcontrollers
  */
 
-#include <stdio.h>
+#include <cstdio>
+#include <cmath>
+#include <algorithm>
 
-// Includes nativos do FreeRTOS e Arquitetura do ESP32
+// APIs do FreeRTOS e Sistema ESP
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_cpu.h"             // Acesso aos contadores de ciclos do hardware (Xtensa LX6/LX7)
-#include "esp_private/esp_clk.h" // Leitura da frequência atual do clock da CPU
-#include "esp_heap_caps.h"       // Gestão avançada de memória RAM (SRAM e PSRAM/SPIRAM)
+#include "esp_cpu.h"
+#include "esp_private/esp_clk.h"
+#include "esp_heap_caps.h"
 
-// TensorFlow Lite for Microcontrollers (TFLM) - Dependências do componente esp-tflite-micro
-#include "tensorflow/lite/micro/micro_mutable_op_resolver.h" // Registro manual de operadores (reduz binário)
-#include "tensorflow/lite/micro/micro_interpreter.h"        // Engine de execução e inferência
-#include "tensorflow/lite/schema/schema_generated.h"        // Validação da versão do Schema FlatBuffers
+// Arquitetura TFLite Micro
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/schema/schema_generated.h"
 
-// Arrays C/C++ contendo o modelo quantizado (INT8) e amostras de imagens estáticas pré-processadas
+// Datasets do Modelo e Imagens
 #include "model_data.h"
 #include "sample_empty.h"
 #include "sample_occupied.h"
 
-/**
- * @brief Tamanho da Tensor Arena (Buffer de trabalho interno do TFLite).
- * 
- * Alocado dinamicamente no Heap para armazenar tensores de entrada, saída, 
- * mapas de características intermediários e estados de camadas.
- * Definido com margem de segurança (~120 KB).
- */
-constexpr size_t kTensorArenaSize = 120 * 1024;
-
-extern "C" void app_main(void) {
-    // Atraso inicial de 1s para permitir a estabilização do hardware do UART/Serial Monitor
-    vTaskDelay(pdMS_TO_TICKS(1000));
+namespace {
+    constexpr size_t kTensorArenaSize = 120 * 1024; // 120 KB de memória de trabalho
+    constexpr int kBenchmarkRuns = 50;
     
+    struct BenchmarkMetrics {
+        float mean_ms;
+        float std_dev_ms;
+        float min_ms;
+        float max_ms;
+        size_t sram_usage_bytes;
+        int8_t raw_output;
+    };
+}
+
+/**
+ * @brief Pré-processa o buffer de imagem bruta e quantiza os pixels diretamente para o tensor INT8.
+ */
+static void QuantizeImageToInput(const uint8_t* raw_img, size_t img_len, TfLiteTensor* input_tensor) {
+    if (input_tensor->type != kTfLiteInt8) return;
+
+    const float scale = input_tensor->params.scale;
+    const int32_t zero_point = input_tensor->params.zero_point;
+
+    for (size_t i = 0; i < img_len; ++i) {
+        if (scale != 0.0f) {
+            float normalized = static_cast<float>(raw_img[i]) / 255.0f;
+            int32_t q_val = static_cast<int32_t>(std::round(normalized / scale)) + zero_point;
+            
+            // Limites de saturação [-128, 127] com casts explícitos para evitar erro no std::clamp
+            q_val = std::clamp(q_val, static_cast<int32_t>(-128), static_cast<int32_t>(127));
+            input_tensor->data.int8[i] = static_cast<int8_t>(q_val);
+        } else {
+            input_tensor->data.int8[i] = static_cast<int8_t>(static_cast<int16_t>(raw_img[i]) - 128);
+        }
+    }
+}
+
+extern "C" void app_main(void) 
+{
+    // Atraso para estabilização do hardware
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
     printf("\n==================================================\n");
-    printf("   SMART PARKING TINYML BENCHMARK - ESP32        \n");
+    printf("   BENCHMARK TINYML DE ESTACIONAMENTO - ESP-IDF   \n");
     printf("==================================================\n");
 
-    // -------------------------------------------------------------------------
-    // 1. MONITORAMENTO DE MEMÓRIA INICIAL
-    // -------------------------------------------------------------------------
-    // Mede a quantidade de memória SRAM interna disponível antes de qualquer alocação.
-    size_t free_sram_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    printf("[MEMORIA] SRAM Livre Antes da Alocação: %u bytes\n", (unsigned int)free_sram_before);
+    const size_t sram_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    printf("[SIS] SRAM Interna Livre (Pré-alocação): %zu bytes\n", sram_before);
 
-    // -------------------------------------------------------------------------
-    // 2. ALOCAÇÃO DINÂMICA DA TENSOR ARENA
-    // -------------------------------------------------------------------------
-    // Tenta alocar na PSRAM externa (SPIRAM) se disponível; caso contrário, usa a SRAM interna.
-    uint8_t* tensor_arena = (uint8_t*) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (tensor_arena == nullptr) {
-        tensor_arena = (uint8_t*) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Alocação Dinâmica da Tensor Arena (Fallback de PSRAM para SRAM Interna)
+    uint8_t* tensor_arena = static_cast<uint8_t*>(heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!tensor_arena) 
+    {
+        tensor_arena = static_cast<uint8_t*>(heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     }
 
-    if (tensor_arena == nullptr) {
-        printf("[ERRO] Falha crítica ao alocar %u bytes para o Tensor Arena no Heap!\n", (unsigned int)kTensorArenaSize);
+    if (!tensor_arena) 
+    {
+        printf("[ERRO] Falha ao alocar Tensor Arena (%zu bytes)\n", kTensorArenaSize);
         return;
     }
 
-    // -------------------------------------------------------------------------
-    // 3. CARREGAMENTO E VALIDAÇÃO DO MODELO
-    // -------------------------------------------------------------------------
-    // Mapeia o vetor 'smart_parking_model_int8_tflite' armazenado na Flash (RODATA)
+    // Carrega o Modelo TFLite
     const tflite::Model* model = tflite::GetModel(smart_parking_model_int8_tflite);
     if (model->version() != TFLITE_SCHEMA_VERSION) {
-        printf("[ERRO] Versão do Schema TFLite incompatível!\n");
+        printf("[ERRO] Incompatibilidade de versão do schema do modelo!\n");
         heap_caps_free(tensor_arena);
         return;
     }
 
-    // -------------------------------------------------------------------------
-    // 4. REGISTRO SELETIVO DE OPERADORES (OpResolver)
-    // -------------------------------------------------------------------------
-    // Registra explicitamente apenas as camadas necessárias ao modelo para economizar Flash.
+    // Registro de Operadores (Resolver)
     static tflite::MicroMutableOpResolver<20> resolver;
     resolver.AddConv2D();
     resolver.AddDepthwiseConv2D();
@@ -94,113 +112,97 @@ extern "C" void app_main(void) {
     resolver.AddStridedSlice();
     resolver.AddPack();
     resolver.AddUnpack();
-    resolver.AddLogistic(); 
+    resolver.AddLogistic();
     resolver.AddPad();
     resolver.AddMul();
     resolver.AddAdd();
     resolver.AddQuantize();
     resolver.AddDequantize();
 
-    // -------------------------------------------------------------------------
-    // 5. INSTANCIAÇÃO DO INTÉRPRETE E Mapeamento DOS TENSORES
-    // -------------------------------------------------------------------------
-    auto* interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, kTensorArenaSize);
-
-    // Aloca a memória da Tensor Arena para os tensores de cada camada do grafo
-    if (interpreter->AllocateTensors() != kTfLiteOk) {
-        printf("[ERRO] Falha ao alocar tensores! Verifique o tamanho do kTensorArenaSize.\n");
+    // Inicialização do Intérprete
+    tflite::MicroInterpreter interpreter(model, resolver, tensor_arena, kTensorArenaSize);
+    if (interpreter.AllocateTensors() != kTfLiteOk) 
+    {
+        printf("[ERRO] Falha na alocação de tensores dentro da Arena!\n");
         heap_caps_free(tensor_arena);
         return;
     }
 
-    // Ponteiros para os buffers de Entrada (Input) e Saída (Output)
-    TfLiteTensor* input = interpreter->input(0);
-    TfLiteTensor* output = interpreter->output(0);
+    TfLiteTensor* input = interpreter.input(0);
+    TfLiteTensor* output = interpreter.output(0);
 
-    // -------------------------------------------------------------------------
-    // 6. PRÉ-PROCESSAMENTO E QUANTIZAÇÃO INT8 DA IMAGEM
-    // -------------------------------------------------------------------------
-    // Carrega a imagem estática pré-convertida em array C (`sample_empty`)
-    const uint8_t* raw_image = (const uint8_t*)sample_empty; 
-    size_t image_size = sample_empty_len;
+    // Quantiza a Imagem de Exemplo
+    QuantizeImageToInput(reinterpret_cast<const uint8_t*>(sample_empty), sample_empty_len, input);
+    printf("[DADOS] Imagem de teste quantizada no tensor de entrada (%zu bytes)\n", sample_empty_len);
 
-    // Se a entrada do modelo for quantizada em INT8 (faixa -128 a 127)
-    if (input->type == kTfLiteInt8) {
-        float scale = input->params.scale;
-        int32_t zero_point = input->params.zero_point;
-
-        // Converte e quantiza pixel por pixel: Q = (Real / Scale) + ZeroPoint
-        for (size_t i = 0; i < image_size; i++) {
-            if (scale != 0.0f) {
-                float normalized_val = (float)raw_image[i] / 255.0f; // Normalização [0.0, 1.0]
-                int32_t q_val = (int32_t)(normalized_val / scale) + zero_point;
-                
-                // Truncamento dentro dos limites do inteiro de 8 bits assinado
-                if (q_val < -128) q_val = -128;
-                if (q_val > 127) q_val = 127;
-                
-                input->data.int8[i] = (int8_t)q_val;
-            } else {
-                // Algoritmo de fallback para alinhamento simples de offset
-                input->data.int8[i] = (int8_t)((int16_t)raw_image[i] - 128);
-            }
-        }
-    } else if (input->type == kTfLiteUInt8) {
-        // Cópia direta para modelos não assinados [0, 255]
-        for (size_t i = 0; i < image_size; i++) {
-            input->data.uint8[i] = raw_image[i];
-        }
-    }
-
-    printf("[DADOS] Imagem de Teste Carregada e Quantizada no Tensor (%u bytes)\n", (unsigned int)image_size);
-
-    // -------------------------------------------------------------------------
-    // 7. EXECUÇÃO DA INFERÊNCIA E MEDIÇÃO DE TEMPO DE CPU
-    // -------------------------------------------------------------------------
-    // Captura o ciclo exato da CPU antes da inferência via registrador CCOUNT
-    uint32_t start_cycles = esp_cpu_get_cycle_count();
-
-    // Executa o grafo computacional da rede neural no ESP32
-    TfLiteStatus invoke_status = interpreter->Invoke();
-
-    // Captura o ciclo final da CPU
-    uint32_t end_cycles = esp_cpu_get_cycle_count();
-
-    if (invoke_status != kTfLiteOk) {
-        printf("[ERRO] Falha ao executar a inferência!\n");
+    // Execução de Aquecimento (Warm-up)
+    printf("\n[BENCHMARK] Executando iteração de aquecimento...\n");
+    if (interpreter.Invoke() != kTfLiteOk) 
+    {
+        printf("[ERRO] Falha na inferência de aquecimento!\n");
         heap_caps_free(tensor_arena);
         return;
     }
 
-    // -------------------------------------------------------------------------
-    // 8. CÁLCULO DE MÉTRICAS E DESEMPENHO
-    // -------------------------------------------------------------------------
-    uint32_t total_cycles = end_cycles - start_cycles;
-    
-    // Converte ciclos de CPU em milissegundos utilizando a frequência do clock (ex: 160MHz)
-    float latency_ms = ((float)total_cycles / (float)esp_clk_cpu_freq()) * 1000.0f;
-    
-    // Mede a SRAM restante pós-execução para calcular o consumo líquido
-    size_t free_sram_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    // Loop de Profiling Estatístico
+    printf("[BENCHMARK] Coletando métricas ao longo de %d iterações...\n", kBenchmarkRuns);
 
-    // -------------------------------------------------------------------------
-    // 9. INTERPRETAÇÃO DOS RESULTADOS E LOGS
-    // -------------------------------------------------------------------------
-    // Saída escalar INT8: Valores maiores que 0 indicam probabilidade de ocupação (> 50%)
-    int8_t raw_output = output->data.int8[0];
-    const char* status = (raw_output > 0) ? "OCUPADA" : "LIVRE";
+    float latencies[kBenchmarkRuns];
+    float total_latency_ms = 0.0f;
+    const uint32_t cpu_freq = esp_clk_cpu_freq();
 
-    printf("\n--- RESULTADOS DA INFERÊNCIA ---\n");
-    printf("Saída Bruta INT8 : %d\n", raw_output);
-    printf("Status Detectado : VAGA %s\n", status);
-    printf("Latência Exata   : %.2f ms (%lu ciclos de CPU)\n", latency_ms, (unsigned long)total_cycles);
-    printf("Consumo de SRAM  : %u bytes\n", (unsigned int)(free_sram_before - free_sram_after));
+    for (int i = 0; i < kBenchmarkRuns; ++i) 
+    {
+        uint32_t start_cycles = esp_cpu_get_cycle_count();
+        
+        interpreter.Invoke();
+        
+        uint32_t end_cycles = esp_cpu_get_cycle_count();
+        uint32_t cycles = end_cycles - start_cycles;
+
+        float latency_ms = (static_cast<float>(cycles) / static_cast<float>(cpu_freq)) * 1000.0f;
+        latencies[i] = latency_ms;
+        total_latency_ms += latency_ms;
+
+        // Alimenta o Watchdog (TWDT) do FreeRTOS para evitar estouro durante loops intensivos de CPU
+        vTaskDelay(1);
+    }
+
+    // Cálculo das Métricas
+    BenchmarkMetrics metrics;
+    metrics.mean_ms = total_latency_ms / static_cast<float>(kBenchmarkRuns);
+    metrics.min_ms = latencies[0];
+    metrics.max_ms = latencies[0];
+
+    float variance_sum = 0.0f;
+    for (int i = 0; i < kBenchmarkRuns; ++i) 
+    {
+        variance_sum += std::pow(latencies[i] - metrics.mean_ms, 2);
+        metrics.min_ms = std::min(metrics.min_ms, latencies[i]);
+        metrics.max_ms = std::max(metrics.max_ms, latencies[i]);
+    }
+
+    metrics.std_dev_ms = std::sqrt(variance_sum / static_cast<float>(kBenchmarkRuns));
+    
+    const size_t sram_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    metrics.sram_usage_bytes = sram_before - sram_after;
+    metrics.raw_output = output->data.int8[0];
+
+    const char* status_str = (metrics.raw_output > 0) ? "OCUPADO" : "LIVRE";
+
+   
+    printf("\n--- RESUMO ESTATÍSTICO DO BENCHMARK (%d RODADAS) ---\n", kBenchmarkRuns);
+    printf("Saída Bruta INT8   : %d\n", metrics.raw_output);
+    printf("Status da Vaga     : %s\n", status_str);
+    printf("Latência Média     : %.2f ms\n", metrics.mean_ms);
+    printf("Desvio Padrão      : %.2f ms\n", metrics.std_dev_ms);
+    printf("Latência Mínima    : %.2f ms\n", metrics.min_ms);
+    printf("Latência Máxima    : %.2f ms\n", metrics.max_ms);
+    printf("Consumo de SRAM    : %zu bytes\n", metrics.sram_usage_bytes);
     printf("--------------------------------------------------\n");
 
-    // Saída estruturada em JSON para facilidade de parse por scripts remotos/Iot
-    printf("JSON_LOG:{\"app\":\"smart_parking\", \"status\":\"%s\", \"raw_int8\":%d, \"latency_ms\":%.2f, \"sram_bytes\":%u}\n",
-           status, raw_output, latency_ms, (unsigned int)(free_sram_before - free_sram_after));
+    printf("JSON_LOG:{\"app\":\"smart_parking\", \"status\":\"%s\", \"runs\":%d, \"mean_ms\":%.2f, \"std_ms\":%.2f, \"min_ms\":%.2f, \"max_ms\":%.2f, \"sram_bytes\":%zu}\n",
+           status_str, kBenchmarkRuns, metrics.mean_ms, metrics.std_dev_ms, metrics.min_ms, metrics.max_ms, metrics.sram_usage_bytes);
 
-    // Liberação de memória alocada dinamicamente
     heap_caps_free(tensor_arena);
 }

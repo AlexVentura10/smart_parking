@@ -1,8 +1,0 @@
-Command: ninja all
-[1/4] cd /home/alex_ventura/Mestrado/smart_parking/build && /home/alex_ventura/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/alex_ventura/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/alex_ventura/Mestrado/smart_parking/build/partition_table/partition-table.bin /home/alex_ventura/Mestrado/smart_parking/build/smart_parking_tinyml.bin
-smart_parking_tinyml.bin binary size 0x8dfe0 bytes. Smallest app partition is 0x100000 bytes. 0x72020 bytes (45%) free.
-[2/4] Performing build step for 'bootloader'
-[1/1] cd /home/alex_ventura/Mestrado/smart_parking/build/bootloader && /home/alex_ventura/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/alex_ventura/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/alex_ventura/Mestrado/smart_parking/build/bootloader/bootloader.bin
-Bootloader binary size 0x65f0 bytes. 0xa10 bytes (9%) free.
-[3/4] No install step for 'bootloader'
-[4/4] Completed 'bootloader'
