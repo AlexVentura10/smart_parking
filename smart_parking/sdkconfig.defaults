@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Alvo e memória — ESP32-S3-N16R8 (16MB flash, 8MB PSRAM octal)
+# ---------------------------------------------------------------------------
+CONFIG_IDF_TARGET="esp32s3"
+
+# Flash: 16MB, modo QIO (o "qio" de "qio_opi")
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# PSRAM: 8MB octal (o "opi" de "qio_opi")
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=n
+
+# Se algo alocado com MALLOC_CAP_SPIRAM ultrapassar o disponível,
+# preferimos falhar de forma explícita a silenciosamente usar heap interno.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+
+# ---------------------------------------------------------------------------
+# CPU / performance
+# ---------------------------------------------------------------------------
+CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# ---------------------------------------------------------------------------
+# Tabela de partições customizada (ver partitions.csv)
+# ---------------------------------------------------------------------------
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---------------------------------------------------------------------------
+# Log
+# ---------------------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

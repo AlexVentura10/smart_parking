@@ -1,0 +1,16 @@
+# --- PYTHON / NANONAS ---
+__pycache__/
+*.pyc
+nanonas_env/
+nan_nas_project/NanoNAS/results_pklot/search_history/
+
+# --- DATASETS ---
+pklot_dataset/
+archive/
+
+# --- ESP32 / ESP-IDF (Smart Parking) ---
+smart_parking/build/
+smart_parking/managed_components/
+smart_parking/sdkconfig
+smart_parking/sdkconfig.old
+smart_parking/dependencies.lock
