@@ -20,6 +20,8 @@ projeto-pklot-esp32/
 ├── nanonas/                 # Python scripts for NAS, training, and quantization
 └── smart_parking/           # C/C++ firmware for ESP32-S3 (ESP-IDF)
 
+```
+
 Hardware Target
 Microcontroller: ESP32-S3
 
