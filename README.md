@@ -33,8 +33,11 @@ Target Constraints: Low RAM and Flash usage optimized for edge devices.
 Navigate to the nanonas folder and run the search script:
 
 Bash
+
+```text
 python search.py
 
+```
 2. ESP32 Firmware (C / ESP-IDF)
 Open the smart_parking folder in VS Code, build, and flash the project to your ESP32-S3 board.
 
