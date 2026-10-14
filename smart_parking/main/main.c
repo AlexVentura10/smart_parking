@@ -10,29 +10,36 @@
 #include "esp_netif.h"
 #include "esp_http_server.h"
 #include "esp_camera.h"
-#include "esp_psram.h"
 #include "img_converters.h" 
-
+#include "mqtt_client.h"
 #include "app_camera.h"
 #include "app_model.h"
+#include "esp_psram.h"
+#include "esp_heap_caps.h"
 
-// Defina aqui as credenciais da sua rede Wi-Fi
+// Defina aqui as credenciais da rede Wi-Fi 
 #define WIFI_SSID      "Mary"
 #define WIFI_PASS      "mary0912"
 
+#define MQTT_BROKER_URI "mqtt://broker.hivemq.com:1883"  // Configuração do broker MQTT público (HiveMQ)
+
 static const char *TAG = "main";
 static httpd_handle_t camera_httpd = NULL;
+static esp_mqtt_client_handle_t client = NULL;
 
 // Callback de eventos do Wi-Fi
 static void event_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) 
+    {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
+    {
         esp_wifi_connect();
         ESP_LOGI(TAG, "A tentar religar ao Wi-Fi...");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) 
+    {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Ligado com sucesso! Endereço IP: " IPSTR, IP2STR(&event->ip_info.ip));
     }
@@ -61,12 +68,14 @@ void wifi_init_sta(void)
                                                         NULL,
                                                         &instance_got_ip));
 
-    wifi_config_t wifi_config = {
+    wifi_config_t wifi_config = 
+    {
         .sta = {
             .ssid = WIFI_SSID,
             .password = WIFI_PASS,
         },
     };
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -74,13 +83,13 @@ void wifi_init_sta(void)
     ESP_LOGI(TAG, "wifi_init_sta concluído.");
 }
 
-// Handler para a página HTML principal que carrega a imagem corretamente no navegador
+// Handler para a página HTML principal que carrega a imagem corretamente no navegador.
 static esp_err_t index_handler(httpd_req_t *req) {
     const char* resp = "<html><head><title>ESP32 Cam Stream - Smart Parking</title></head>"
                        "<body style='background:#111; text-align:center; color:white; font-family:sans-serif;'>"
                        "<h2>ESP32-S3 Smart Parking - Camera Stream</h2>"
                        "<div style='margin-top:20px;'>"
-                       "<img src='/stream' style='max-width:100%%; border:2px solid #444; border-radius:8px;'/>"
+                       "<img src='/stream' style='width:640px; max-width:100%%; height:auto; border:2px solid #444; border-radius:8px;'/>"
                        "</div>"
                        "</body></html>";
     httpd_resp_set_type(req, "text/html");
@@ -88,7 +97,8 @@ static esp_err_t index_handler(httpd_req_t *req) {
 }
 
 // Handler responsável por converter o frame RGB565 para JPEG e enviar para o navegador
-static esp_err_t stream_handler(httpd_req_t *req) {
+static esp_err_t stream_handler(httpd_req_t *req) 
+{
     camera_fb_t *fb = NULL;
     esp_err_t res = ESP_OK;
     char part_buf[64];
@@ -99,7 +109,8 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     res = httpd_resp_set_type(req, _stream_content_type);
     if (res != ESP_OK) return res;
 
-    while (true) {
+    while (true) 
+    {
         fb = esp_camera_fb_get();
         if (!fb) {
             ESP_LOGW(TAG, "Falha ao capturar frame para o stream");
@@ -116,7 +127,8 @@ static esp_err_t stream_handler(httpd_req_t *req) {
         // Devolvemos o framebuffer imediatamente para liberar para o modelo de inferência
         esp_camera_fb_return(fb);
 
-        if (!jpeg_converted) {
+        if (!jpeg_converted) 
+        {
             ESP_LOGE(TAG, "Falha ao converter RGB565 para JPEG");
             res = ESP_FAIL;
             break;
@@ -139,33 +151,67 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 }
 
 // Inicia o servidor HTTP do ESP-IDF registrando as rotas '/' e '/stream'
-void start_camera_server(void) {
+void start_camera_server(void) 
+{
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
-    httpd_uri_t index_uri = {
+    httpd_uri_t index_uri = 
+    {
         .uri       = "/",
         .method    = HTTP_GET,
         .handler   = index_handler,
         .user_ctx  = NULL
     };
 
-    httpd_uri_t stream_uri = {
+    httpd_uri_t stream_uri = 
+    {
         .uri       = "/stream",
         .method    = HTTP_GET,
         .handler   = stream_handler,
         .user_ctx  = NULL
     };
 
-    if (httpd_start(&camera_httpd, &config) == ESP_OK) {
+    if (httpd_start(&camera_httpd, &config) == ESP_OK) 
+    {
         httpd_register_uri_handler(camera_httpd, &index_uri);
         httpd_register_uri_handler(camera_httpd, &stream_uri);
         ESP_LOGI(TAG, "Servidor web de streaming iniciado na porta 80.");
     }
 }
 
+// Callback de eventos do MQTT
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    esp_mqtt_event_t *event = event_data; 
+    
+    switch ((esp_mqtt_event_id_t)event_id) 
+    {
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "Conectado ao Broker MQTT com sucesso!");
+            break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "Desconectado do MQTT.");
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGI(TAG, "Dados recebidos no tópico: %.*s", event->topic_len, event->topic);
+            break;
+        default:
+            break;
+    }
+}
+
+static void mqtt_app_start(void) 
+{
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .broker.address.uri = MQTT_BROKER_URI,
+    };
+    client = esp_mqtt_client_init(&mqtt_cfg);
+    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    esp_mqtt_client_start(client);
+}
+
 void app_main(void)
 {
-    // 1. Inicializar memória NVS (necessária para o controlador Wi-Fi)
+    // 1. Inicializar memória NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NEW_VERSION_FOUND || ret == ESP_ERR_NVS_NO_FREE_PAGES) 
     {
@@ -176,12 +222,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "PSRAM disponivel: %u bytes", (unsigned int)esp_psram_get_size());
 
-    for (int i = 3; i > 0; i--) {
-        ESP_LOGI(TAG, "A iniciar em %d...", i);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-
-    // 2. Ligar ao Wi-Fi configurado acima
+    // 2. Ligar ao Wi-Fi configurado
     wifi_init_sta();
 
     // 3. Inicializar câmara e modelo
@@ -192,14 +233,19 @@ void app_main(void)
         return;
     }
 
-    // 4. Iniciar servidor web para ver o fluxo de vídeo
+    // 4. Iniciar servidor web de streaming
     start_camera_server();
 
-    ESP_LOGI(TAG, "Sistema pronto. A iniciar ciclo de inferencia.");
+    // 5. Iniciar cliente MQTT
+    mqtt_app_start();
 
-    while (1) {
-        camera_fb_t *fb = app_camera_capture();
-        if (fb == NULL) {
+    ESP_LOGI(TAG, "Sistema pronto. A iniciar ciclo de inferencia e publicacao MQTT.");
+
+   while (1) 
+   {
+        camera_fb_t *fb = app_camera_capture(); 
+        if (fb == NULL) 
+        {
             ESP_LOGW(TAG, "Falha ao capturar frame");
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
@@ -207,17 +253,44 @@ void app_main(void)
 
         int predicted_class = -1;
         float confidence = 0.0f;
-        esp_err_t res = app_model_predict(fb, &predicted_class, &confidence);
 
-        if (res == ESP_OK) {
-            const char *status = (predicted_class == 0) ? "OCUPADA" : "LIVRE";
-            ESP_LOGI(TAG, "Vaga: %s (classe=%d, confianca=%.3f)",
-                     status, predicted_class, confidence);
-        } else {
+        // 1. Registra o heap antes da inferência
+        size_t free_heap_antes = esp_get_free_heap_size(); 
+
+        // 2. Realiza a inferência 
+        esp_err_t res = app_model_predict(fb, &predicted_class, &confidence); 
+
+        // 3. Registra o heap depois da inferência 
+        size_t free_heap_depois = esp_get_free_heap_size();
+
+        // 4. Calcula e imprime a diferença de heap antes e depois da inferência
+        ESP_LOGI("MEM_TEST", "Heap livre: %u bytes (Diferenca/Uso: %u bytes)", 
+                 free_heap_depois, 
+                 (free_heap_antes > free_heap_depois) ? (free_heap_antes - free_heap_depois) : 0);
+
+
+      if (res == ESP_OK) 
+      {
+            int vaga_01_estado = predicted_class; 
+
+            const char *status = (vaga_01_estado == 1) ? "LIVRE" : "OCUPADA";
+            ESP_LOGI(TAG, "Vaga: %s (estado_mqtt=%d, confianca=%.3f)", 
+                     status, vaga_01_estado, confidence);
+
+            char payload[128]; // Define um buffer para o payload JSON.
+            snprintf(payload, sizeof(payload),  // Cria o payload JSON para enviar via MQTT
+                     "{\"node_id\":\"esp32_s3_01\",\"vaga_01\":%d,\"confianca\":%.2f}", 
+                     vaga_01_estado, confidence);  
+
+            esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0); // publica no tópico MQTT. OBS: O payload é um JSON com o estado da vaga e a confiança da inferência
+        }
+        else 
+        {
             ESP_LOGW(TAG, "Inferencia falhou (0x%x)", res);
         }
 
         app_camera_return(fb);
-        vTaskDelay(pdMS_TO_TICKS(500));
+        
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
