@@ -34,7 +34,7 @@ esp_err_t app_camera_init(void)
         // o .tflite), então capturamos em RGB565 — depois convertida para
         // RGB888 e redimensionada em app_model.cpp antes da inferência.
         .pixel_format = PIXFORMAT_RGB565,
-        .frame_size   = FRAMESIZE_QQVGA,   // 160x120
+        .frame_size   = FRAMESIZE_QVGA,   // 320x240, o modelo espera 320x240 de entrada
 
         .jpeg_quality = 12,                // ignorado fora de PIXFORMAT_JPEG
         .fb_count     = 2,

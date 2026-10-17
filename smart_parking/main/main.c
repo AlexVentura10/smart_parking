@@ -27,21 +27,35 @@ static const char *TAG = "main";
 static httpd_handle_t camera_httpd = NULL;
 static esp_mqtt_client_handle_t client = NULL;
 
-// Callback de eventos do Wi-Fi
+// Variável global para controlar se o MQTT já foi iniciado
+static bool mqtt_initialized = false;
+
+// Declaração antecipada do mqtt_app_start para o event_handler poder chamá-la
+static void mqtt_app_start(void);
+
+// Callback de eventos do Wi-Fi e IP (Versão Única e Consolidada)
 static void event_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) 
     {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
+    } 
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) 
     {
         esp_wifi_connect();
         ESP_LOGI(TAG, "A tentar religar ao Wi-Fi...");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) 
+    } 
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) 
     {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Ligado com sucesso! Endereço IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        
+        // Inicia o MQTT apenas após estar com IP garantido para evitar falha de DNS
+        if (!mqtt_initialized) {
+            mqtt_app_start();
+            mqtt_initialized = true;
+        }
     }
 }
 
@@ -222,10 +236,10 @@ void app_main(void)
 
     ESP_LOGI(TAG, "PSRAM disponivel: %u bytes", (unsigned int)esp_psram_get_size());
 
-    // 2. Ligar ao Wi-Fi configurado
+    // 2. Ligar ao Wi-Fi configurado (o MQTT vai arrancar via callback de IP)
     wifi_init_sta();
 
-    // 3. Inicializar câmara e modelo
+    // 3. Inicializar câmara (Verifique se o frame_size no app_camera_init() está correto)
     ESP_ERROR_CHECK(app_camera_init());
 
     if (app_model_init() != ESP_OK) {
@@ -233,16 +247,13 @@ void app_main(void)
         return;
     }
 
-    // 4. Iniciar servidor web de streaming
+    // 4. Iniciar servidor web de streaming para o Grafana/Navegador
     start_camera_server();
-
-    // 5. Iniciar cliente MQTT
-    mqtt_app_start();
 
     ESP_LOGI(TAG, "Sistema pronto. A iniciar ciclo de inferencia e publicacao MQTT.");
 
-   while (1) 
-   {
+    while (1) 
+    {
         camera_fb_t *fb = app_camera_capture(); 
         if (fb == NULL) 
         {
@@ -254,35 +265,30 @@ void app_main(void)
         int predicted_class = -1;
         float confidence = 0.0f;
 
-        // 1. Registra o heap antes da inferência
         size_t free_heap_antes = esp_get_free_heap_size(); 
-
-        // 2. Realiza a inferência 
         esp_err_t res = app_model_predict(fb, &predicted_class, &confidence); 
-
-        // 3. Registra o heap depois da inferência 
         size_t free_heap_depois = esp_get_free_heap_size();
 
-        // 4. Calcula e imprime a diferença de heap antes e depois da inferência
         ESP_LOGI("MEM_TEST", "Heap livre: %u bytes (Diferenca/Uso: %u bytes)", 
                  free_heap_depois, 
                  (free_heap_antes > free_heap_depois) ? (free_heap_antes - free_heap_depois) : 0);
 
-
-      if (res == ESP_OK) 
-      {
+        if (res == ESP_OK) 
+        {
             int vaga_01_estado = predicted_class; 
-
             const char *status = (vaga_01_estado == 1) ? "LIVRE" : "OCUPADA";
+            
             ESP_LOGI(TAG, "Vaga: %s (estado_mqtt=%d, confianca=%.3f)", 
                      status, vaga_01_estado, confidence);
 
-            char payload[128]; // Define um buffer para o payload JSON.
-            snprintf(payload, sizeof(payload),  // Cria o payload JSON para enviar via MQTT
-                     "{\"node_id\":\"esp32_s3_01\",\"vaga_01\":%d,\"confianca\":%.2f}", 
-                     vaga_01_estado, confidence);  
+            if (client != NULL) {
+                char payload[128]; 
+                snprintf(payload, sizeof(payload),  
+                         "{\"node_id\":\"esp32_s3_01\",\"vaga_01\":%d,\"confianca\":%.2f}", 
+                         vaga_01_estado, confidence);  
 
-            esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0); // publica no tópico MQTT. OBS: O payload é um JSON com o estado da vaga e a confiança da inferência
+                esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0); 
+            }
         }
         else 
         {
