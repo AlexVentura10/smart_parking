@@ -30,11 +30,11 @@ esp_err_t app_camera_init(void)
         .ledc_timer   = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
 
-        // ALTERADO: O modelo agora espera entrada em escala de cinza (1 canal).
+        // O modelo espera entrada em escala de cinza (1 canal).
         // Capturar diretamente em GRAYSCALE poupa largura de banda na câmara e 
         // elimina a necessidade de conversão pesada no ESP32-S3.
         .pixel_format = PIXFORMAT_GRAYSCALE,
-        .frame_size   = FRAMESIZE_QVGA,   // Mantém 320x240 (ou ajusta conforme o teu recorte de ROI)
+        .frame_size   = FRAMESIZE_QVGA,   // Mantém 320x240 (ou ajusta conforme o recorte de ROI)
 
         .jpeg_quality = 12,                // ignorado fora de PIXFORMAT_JPEG
         .fb_count     = 2,
@@ -42,10 +42,9 @@ esp_err_t app_camera_init(void)
         .grab_mode    = CAMERA_GRAB_LATEST,
     };
 
-    // O sensor da sua placa é o OV3660 (visível na etiqueta do módulo FPC).
+    // O sensor da placa é o OV3660.
     // O componente esp32-camera detecta o modelo automaticamente via SCCB
-    // (lê o registro de ID do sensor), então não é preciso indicar qual
-    // sensor é — só falha aqui se a fiação/pinout estiver errada.
+    // (lê o registro de ID do sensor)
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_camera_init falhou: 0x%x", err);
