@@ -101,7 +101,7 @@ void wifi_init_sta(void)
 static esp_err_t index_handler(httpd_req_t *req) {
     const char* resp = "<html><head><title>ESP32 Cam Stream - Smart Parking</title></head>"
                        "<body style='background:#111; text-align:center; color:white; font-family:sans-serif;'>"
-                       "<h2>ESP32-S3 Smart Parking - Camera Stream</h2>"
+                       "<h2>ESP32-S3 Smart Parking - Camera Stream (Grayscale)</h2>"
                        "<div style='margin-top:20px;'>"
                        "<img src='/stream' style='width:640px; max-width:100%%; height:auto; border:2px solid #444; border-radius:8px;'/>"
                        "</div>"
@@ -110,7 +110,7 @@ static esp_err_t index_handler(httpd_req_t *req) {
     return httpd_resp_send(req, resp, strlen(resp));
 }
 
-// Handler responsável por converter o frame RGB565 para JPEG e enviar para o navegador
+// Handler responsável por converter o frame GRAYSCALE para JPEG e enviar para o navegador
 static esp_err_t stream_handler(httpd_req_t *req) 
 {
     camera_fb_t *fb = NULL;
@@ -135,15 +135,15 @@ static esp_err_t stream_handler(httpd_req_t *req)
         uint8_t *jpg_buf = NULL;
         size_t jpg_len = 0;
 
-        // Converte o buffer RGB565 para JPEG para o navegador conseguir renderizar
-        bool jpeg_converted = fmt2jpg(fb->buf, fb->len, fb->width, fb->height, PIXFORMAT_RGB565, 80, &jpg_buf, &jpg_len);
+        // ALTERADO: Converte o buffer GRAYSCALE para JPEG para o navegador conseguir renderizar corretamente
+        bool jpeg_converted = fmt2jpg(fb->buf, fb->len, fb->width, fb->height, PIXFORMAT_GRAYSCALE, 80, &jpg_buf, &jpg_len);
         
         // Devolvemos o framebuffer imediatamente para liberar para o modelo de inferência
         esp_camera_fb_return(fb);
 
         if (!jpeg_converted) 
         {
-            ESP_LOGE(TAG, "Falha ao converter RGB565 para JPEG");
+            ESP_LOGE(TAG, "Falha ao converter GRAYSCALE para JPEG");
             res = ESP_FAIL;
             break;
         }
@@ -239,7 +239,7 @@ void app_main(void)
     // 2. Ligar ao Wi-Fi configurado (o MQTT vai arrancar via callback de IP)
     wifi_init_sta();
 
-    // 3. Inicializar câmara (Verifique se o frame_size no app_camera_init() está correto)
+    // 3. Inicializar câmara 
     ESP_ERROR_CHECK(app_camera_init());
 
     if (app_model_init() != ESP_OK) {
@@ -265,13 +265,13 @@ void app_main(void)
         int predicted_class = -1;
         float confidence = 0.0f;
 
-        size_t free_heap_antes = esp_get_free_heap_size(); 
+        size_t free_heap_antes = esp_get_free_heap_size();  
         esp_err_t res = app_model_predict(fb, &predicted_class, &confidence); 
-        size_t free_heap_depois = esp_get_free_heap_size();
+        size_t free_heap_depois = esp_get_free_heap_size(); 
 
         ESP_LOGI("MEM_TEST", "Heap livre: %u bytes (Diferenca/Uso: %u bytes)", 
                  free_heap_depois, 
-                 (free_heap_antes > free_heap_depois) ? (free_heap_antes - free_heap_depois) : 0);
+                 (free_heap_antes > free_heap_depois) ? (free_heap_antes - free_heap_depois) : 0); 
 
         if (res == ESP_OK) 
         {
@@ -287,7 +287,7 @@ void app_main(void)
                          "{\"node_id\":\"esp32_s3_01\",\"vaga_01\":%d,\"confianca\":%.2f}", 
                          vaga_01_estado, confidence);  
 
-                esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0); 
+                esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0);  
             }
         }
         else 

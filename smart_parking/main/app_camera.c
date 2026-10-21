@@ -30,11 +30,11 @@ esp_err_t app_camera_init(void)
         .ledc_timer   = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
 
-        // O modelo espera entrada RGB de 3 canais (confirmado ao inspecionar
-        // o .tflite), então capturamos em RGB565 — depois convertida para
-        // RGB888 e redimensionada em app_model.cpp antes da inferência.
-        .pixel_format = PIXFORMAT_RGB565,
-        .frame_size   = FRAMESIZE_QVGA,   // 320x240, o modelo espera 320x240 de entrada
+        // ALTERADO: O modelo agora espera entrada em escala de cinza (1 canal).
+        // Capturar diretamente em GRAYSCALE poupa largura de banda na câmara e 
+        // elimina a necessidade de conversão pesada no ESP32-S3.
+        .pixel_format = PIXFORMAT_GRAYSCALE,
+        .frame_size   = FRAMESIZE_QVGA,   // Mantém 320x240 (ou ajusta conforme o teu recorte de ROI)
 
         .jpeg_quality = 12,                // ignorado fora de PIXFORMAT_JPEG
         .fb_count     = 2,
@@ -57,7 +57,7 @@ esp_err_t app_camera_init(void)
         ESP_LOGI(TAG, "Sensor detectado, PID=0x%x", sensor->id.PID);
     }
 
-    ESP_LOGI(TAG, "Câmera inicializada: QQVGA 160x120, RGB565, framebuffer em PSRAM");
+    ESP_LOGI(TAG, "Câmera inicializada: QVGA 320x240, GRAYSCALE (1 canal), framebuffer em PSRAM");
     return ESP_OK;
 }
 
