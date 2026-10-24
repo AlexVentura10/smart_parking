@@ -11,9 +11,7 @@
 // pinos abaixo estão fora da faixa GPIO 26–37, reservada internamente
 // pelo PSRAM octal — então não deve haver conflito com o PSRAM.
 //
-// Se ainda assim o firmware travar após "PSRAM enabled", isso descarta
-// a hipótese de conflito de pino e aponta para outra causa (ver
-// README.md, seção de diagnóstico).
+
 // ---------------------------------------------------------------------------
 
 #define CAM_PIN_PWDN    -1   // não usado nesta placa
@@ -37,6 +35,5 @@
 #define CAM_PIN_HREF    7
 #define CAM_PIN_PCLK    13
 
-// LED RGB (WS2812) onboard nesse clone, se presente na sua unidade.
-// Não usado neste projeto, mas deixado aqui de referência.
+// LED RGB (WS2812) onboard, se presente na sua unidade.
 #define BOARD_WS2812_GPIO_NUM 48

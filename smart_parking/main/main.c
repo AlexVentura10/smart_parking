@@ -17,7 +17,7 @@
 #include "esp_psram.h"
 #include "esp_heap_caps.h"
 
-// Defina aqui as credenciais da rede Wi-Fi 
+// Credenciais da rede Wi-Fi 
 #define WIFI_SSID      "Mary"
 #define WIFI_PASS      "mary0912"
 
@@ -135,7 +135,7 @@ static esp_err_t stream_handler(httpd_req_t *req)
         uint8_t *jpg_buf = NULL;
         size_t jpg_len = 0;
 
-        // ALTERADO: Converte o buffer GRAYSCALE para JPEG para o navegador conseguir renderizar corretamente
+        // Converte o buffer GRAYSCALE para JPEG para o navegador conseguir renderizar corretamente
         bool jpeg_converted = fmt2jpg(fb->buf, fb->len, fb->width, fb->height, PIXFORMAT_GRAYSCALE, 80, &jpg_buf, &jpg_len);
         
         // Devolvemos o framebuffer imediatamente para liberar para o modelo de inferência
@@ -265,11 +265,12 @@ void app_main(void)
         int predicted_class = -1;
         float confidence = 0.0f;
 
-        size_t free_heap_antes = esp_get_free_heap_size();  
-        esp_err_t res = app_model_predict(fb, &predicted_class, &confidence); 
-        size_t free_heap_depois = esp_get_free_heap_size(); 
+        size_t free_heap_antes = esp_get_free_heap_size();  // Captura o tamanho do heap livre antes da inferência
+        esp_err_t res = app_model_predict(fb, &predicted_class, &confidence); // Executa a inferência no modelo de ML
+        size_t free_heap_depois = esp_get_free_heap_size(); // Captura o tamanho do heap livre depois da inferência
 
-        ESP_LOGI("MEM_TEST", "Heap livre: %u bytes (Diferenca/Uso: %u bytes)", 
+        // Calcula e exibe a diferença de uso de memória heap antes e depois da inferência
+        ESP_LOGI("MEM_TEST", "Heap livre: %u bytes (Diferenca/Uso: %u bytes)",  
                  free_heap_depois, 
                  (free_heap_antes > free_heap_depois) ? (free_heap_antes - free_heap_depois) : 0); 
 
@@ -282,12 +283,15 @@ void app_main(void)
                      status, vaga_01_estado, confidence);
 
             if (client != NULL) {
-                char payload[128]; 
-                snprintf(payload, sizeof(payload),  
+                char payload[128]; // Buffer para a mensagem JSON limitado a 128 bytes, suficiente para o payload atual
+                snprintf(payload, sizeof(payload),   // Formata o pacote/payload JSON para envio via MQTT
                          "{\"node_id\":\"esp32_s3_01\",\"vaga_01\":%d,\"confianca\":%.2f}", 
                          vaga_01_estado, confidence);  
+                         
+                // Imprime o tamanho exato do payload no Serial Monitor
+                ESP_LOGI("MQTT_PAYLOAD", "Tamanho do pacote: %d bytes", strlen(payload));
 
-                esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0);  
+                esp_mqtt_client_publish(client, "smartparking/vagas", payload, 0, 1, 0);  // Publicação de topico MQTT
             }
         }
         else 

@@ -133,7 +133,7 @@ esp_err_t app_model_predict(camera_fb_t *fb, int *out_class, float *out_confiden
 
     // Tensor de entrada é UINT8 com scale=1.0/zero_point=0 (identidade),
     // ou seja: o modelo foi treinado com pixels brutos 0-255, sem
-    // normalização. Ainda assim aplicamos a fórmula genérica de
+    // normalização. Ainda assim foi aplicado a fórmula genérica de
     // quantização, lendo scale/zero_point do próprio tensor, para o
     // código continuar correto caso o modelo seja retreinado com outra
     // quantização no futuro.
