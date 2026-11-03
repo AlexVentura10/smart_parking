@@ -2,9 +2,9 @@
 #include "camera_pins.h"
 #include "esp_log.h"
 
-static const char *TAG = "app_camera";
+static const char *TAG = "app_camera"; // Tag para mensagens de log relacionadas à câmera.
 
-esp_err_t app_camera_init(void)
+esp_err_t app_camera_init(void)  // Inicializa a câmera com configuração padrão.
 {
     camera_config_t config = {
         .pin_pwdn     = CAM_PIN_PWDN,
@@ -31,26 +31,23 @@ esp_err_t app_camera_init(void)
         .ledc_channel = LEDC_CHANNEL_0,
 
         // O modelo espera entrada em escala de cinza (1 canal).
-        // Capturar diretamente em GRAYSCALE poupa largura de banda na câmara e 
-        // elimina a necessidade de conversão pesada no ESP32-S3.
-        .pixel_format = PIXFORMAT_GRAYSCALE,
+        .pixel_format = PIXFORMAT_GRAYSCALE, // Mantém 1 canal (escala de cinza) para reduzir o uso de memória e largura de banda.
         .frame_size   = FRAMESIZE_QVGA,   // Mantém 320x240 (ou ajusta conforme o recorte de ROI)
 
-        .jpeg_quality = 12,                // ignorado fora de PIXFORMAT_JPEG
+        .jpeg_quality = 12,                // Qualidade JPEG (não usado em GRAYSCALE, mas necessário para inicialização)
         .fb_count     = 2,
         .fb_location  = CAMERA_FB_IN_PSRAM,
         .grab_mode    = CAMERA_GRAB_LATEST,
     };
 
-    // O sensor da placa é o OV3660.
-    // O componente esp32-camera detecta o modelo automaticamente via SCCB
-    // (lê o registro de ID do sensor)
+    // Inicializa a câmera com a configuração especificada do sensor (OV3660).
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_camera_init falhou: 0x%x", err);
         return err;
     }
-
+    
+    // Obtém o sensor e imprime o PID (identificador único) para verificação. 
     sensor_t *sensor = esp_camera_sensor_get();
     if (sensor != NULL) {
         ESP_LOGI(TAG, "Sensor detectado, PID=0x%x", sensor->id.PID);
@@ -60,11 +57,13 @@ esp_err_t app_camera_init(void)
     return ESP_OK;
 }
 
+// Captura uma imagem da câmera e retorna um ponteiro para o framebuffer (espaço de memória onde a imagem é armazenada).
 camera_fb_t *app_camera_capture(void)
 {
     return esp_camera_fb_get();
 }
 
+// Retorna o framebuffer para a câmera, liberando a memória associada.
 void app_camera_return(camera_fb_t *fb)
 {
     if (fb) {

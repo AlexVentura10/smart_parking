@@ -1,12 +1,8 @@
 # --- PYTHON / NANONAS ---
 __pycache__/
 *.pyc
-nanonas_env/
-nan_nas_project/NanoNAS/results_pklot/search_history/
+nanonas_project/NanoNAS/results_pklot/search_history/
 
-# --- DATASETS ---
-pklot_dataset/
-archive/
 
 # --- ESP32 / ESP-IDF (Smart Parking) ---
 smart_parking/build/
