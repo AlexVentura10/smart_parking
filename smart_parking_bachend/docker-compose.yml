@@ -37,4 +37,4 @@ services:
 
 volumes:
   influxdb_data:
-  grafana_data:   # <--- Adicionado para persistir o Grafana
+  grafana_data:  
