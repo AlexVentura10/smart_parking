@@ -1,6 +1,6 @@
 from NanoNAS import NanoNAS
 
-input_shape = (50, 50, 3)  # Confirme se as imagens do PKLot Patches são 50x50
+input_shape = (50, 50, 1)  # Busca da arquitetura configurada para grayscale (1 canal) no tensor de entrada
 
 # Caminhos atualizados para o seu novo dataset PKLot
 path_to_training_set = '/home/alex_ventura/Mestrado/projetos_ia/pklot_dataset/archive/Patches/train'

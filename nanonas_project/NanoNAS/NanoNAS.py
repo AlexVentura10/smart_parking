@@ -8,7 +8,7 @@ import os
 import re
 
 class NanoNAS :
-    def __init__(self, max_ram, max_flash, max_macc, path_to_training_set, val_split, cache=False, input_shape=(50,50,3), save_path='./') :
+    def __init__(self, max_ram, max_flash, max_macc, path_to_training_set, val_split, cache=False, input_shape=(50,50,1), save_path='./') :
         self.path_to_training_set = path_to_training_set
         self.num_classes = len(next(os.walk(path_to_training_set))[1])
         self.val_split = val_split
